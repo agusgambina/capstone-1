@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>V-Score Validator</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/black.min.css">
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1d24;
+      --line: #2c313c;
+      --text: #e6e8ec;
+      --muted: #9aa1ad;
+      --poc: #5b9cf5;
+      --market: #e8a33d;
+      --go: #3fb27f;
+      --derisk: #8c7cf0;
+      --validate: #e8a33d;
+      --shelve: #e0605a;
+    }
+    .reveal-viewport { background: var(--bg); }
+    .reveal { color: var(--text); font-size: 30px; }
+    .reveal h1, .reveal h2 { text-transform: none; letter-spacing: -0.01em; color: var(--text); }
+    .reveal h2 { font-size: 1.6em; margin-bottom: 0.6em; }
+    .reveal .kicker { color: var(--muted); font-size: 0.55em; text-transform: uppercase; letter-spacing: 0.12em; }
+    .reveal .muted { color: var(--muted); }
+    .reveal code { background: var(--panel); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; }
+    .reveal ul { margin: 0; }
+    .reveal li { margin: 0.25em 0; }
+
+    .grid { display: grid; gap: 18px; text-align: left; }
+    .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; font-size: 0.7em; }
+    .card h3 { font-size: 1.05em; margin: 0 0 0.4em; text-transform: none; color: var(--text); }
+    .card.poc { border-top: 4px solid var(--poc); }
+    .card.market { border-top: 4px solid var(--market); }
+
+    /* Orchestration diagram */
+    .flow { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 0.6em; }
+    .node { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 18px; }
+    .node.strong { border-color: var(--text); font-weight: 600; }
+    .node.poc { border-color: var(--poc); }
+    .node.market { border-color: var(--market); }
+    .arrow { color: var(--muted); line-height: 1; }
+    .branches { display: flex; gap: 40px; }
+    .branch { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .scorers { display: flex; gap: 6px; }
+    .scorers .node { padding: 6px 10px; font-size: 0.9em; }
+
+    /* Verdict matrix */
+    .matrix { display: grid; grid-template-columns: auto 1fr 1fr; gap: 10px; font-size: 0.65em; align-items: stretch; }
+    .matrix .axis { color: var(--muted); display: flex; align-items: center; justify-content: center; }
+    .cell { border-radius: 10px; padding: 18px; text-align: left; border: 1px solid var(--line); background: var(--panel); }
+    .cell strong { display: block; font-size: 1.15em; margin-bottom: 0.2em; }
+    .cell.go { border-left: 6px solid var(--go); }
+    .cell.derisk { border-left: 6px solid var(--derisk); }
+    .cell.validate { border-left: 6px solid var(--validate); }
+    .cell.shelve { border-left: 6px solid var(--shelve); }
+
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.55em; color: var(--muted); margin-top: 0.8em; }
+    .checks { font-size: 0.65em; text-align: left; }
+    .checks td, .checks th { border-bottom: 1px solid var(--line) !important; padding: 6px 14px !important; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- 1 · Title -->
+    <section>
+      <p class="kicker">Session 7 · Capstone</p>
+      <h1>V-Score Validator</h1>
+      <p class="muted">Don't type the scores. Orchestrate the agents that reason them out.</p>
+      <aside class="notes">0:10 · Not a calculator: a team of agents that reason each score, plus an orchestrator that decides.</aside>
+    </section>
+
+    <!-- 2 · The Spec -->
+    <section>
+      <p class="kicker">1 · The Spec</p>
+      <h2>Written before building</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Brief</h3>
+          Plain-English idea in → PoC /100, Market /100, verdict, and a reason for every criterion.
+        </div>
+        <div class="card">
+          <h3>Agent breakdown</h3>
+          1 orchestrator → 2 domain agents → 8 criterion scorers. Math in code, not in the LLM.
+        </div>
+        <div class="card" style="grid-column: span 2">
+          <h3>Definition of Done: 6 acceptance cases</h3>
+          Slack bot → Go · Translation earbuds → De-risk First · "AI for everything" → Shelve ·
+          all 10s → 100/100 Go · all 1s → Shelve · exactly 65 → High
+        </div>
+      </div>
+      <aside class="notes">0:25 · Spec written before code. Brief: idea in, 2 scores, verdict, 8 reasons out. DoD = 6 cases (3 judge ideas + 3 boundaries).</aside>
+    </section>
+
+    <!-- 3 · Agent/Skill definitions -->
+    <section>
+      <p class="kicker">2 · Agent &amp; Skill definitions</p>
+      <h2>One scorer per criterion</h2>
+      <div class="grid cols-2">
+        <div class="card poc">
+          <h3>PoC viability</h3>
+          Novelty ×3 · Scope ×4<br>Resources ×2 · Outcome ×1
+        </div>
+        <div class="card market">
+          <h3>Market viability</h3>
+          Pain ×4 · Pay ×3<br>Size ×2 · Moat ×1
+        </div>
+        <div class="card" style="grid-column: span 2">
+          <h3>Contract (every scorer)</h3>
+          <code>{ idea, rubric }</code> → <code>{ criterion, score: 1–10, reason }</code><br>
+          <span class="muted">The <code>description</code> in each <code>SKILL.md</code> is what makes it fire. A score with no reason is rejected.</span>
+        </div>
+      </div>
+      <aside class="notes">0:30 · One scorer per criterion, same contract. Point at a real SKILL.md description: that is what makes it fire. No reason = rejected.</aside>
+    </section>
+
+    <!-- 4 · Orchestration -->
+    <section>
+      <p class="kicker">3 · The Orchestration</p>
+      <h2>Fan out, blind, in parallel</h2>
+      <div class="flow">
+        <div class="node">idea (plain English)</div>
+        <div class="arrow">▼</div>
+        <div class="node strong">Orchestrator</div>
+        <div class="arrow">▼</div>
+        <div class="branches">
+          <div class="branch">
+            <div class="node poc">poc-viability agent</div>
+            <div class="scorers">
+              <div class="node poc">Novelty</div><div class="node poc">Scope</div>
+              <div class="node poc">Resources</div><div class="node poc">Outcome</div>
+            </div>
+          </div>
+          <div class="branch">
+            <div class="node market">market-viability agent</div>
+            <div class="scorers">
+              <div class="node market">Pain</div><div class="node market">Pay</div>
+              <div class="node market">Size</div><div class="node market">Moat</div>
+            </div>
+          </div>
+        </div>
+        <div class="arrow">▼</div>
+        <div class="node strong">deterministic weight · sum · map → verdict</div>
+      </div>
+      <aside class="notes">0:35 · START THE LIVE RUN NOW. Orchestrator → 2 domain agents → 4 blind parallel scorers each. Math is deterministic code.</aside>
+    </section>
+
+    <!-- 5 · Verdict matrix -->
+    <section>
+      <p class="kicker">Decision</p>
+      <h2>Score ≥ 65 = High</h2>
+      <div class="matrix">
+        <div></div>
+        <div class="axis">High PoC</div>
+        <div class="axis">Low PoC</div>
+        <div class="axis">High Market</div>
+        <div class="cell go"><strong>Go</strong>Excellent on both axes.</div>
+        <div class="cell derisk"><strong>De-risk First</strong>Strong demand, hard build. Spike the tech.</div>
+        <div class="axis">Low Market</div>
+        <div class="cell validate"><strong>Validate Demand</strong>Buildable, but prove someone wants it.</div>
+        <div class="cell shelve"><strong>Reframe or Shelve</strong>High risk on both axes.</div>
+      </div>
+      <p class="formula">PoC = N×3 + S×4 + R×2 + O×1 &nbsp;·&nbsp; Market = P×4 + W×3 + Z×2 + M×1</p>
+      <aside class="notes">0:15 · ≥65 = High, inclusive. Two axes → four verdicts.</aside>
+    </section>
+
+    <!-- 6 · Proof -->
+    <section>
+      <p class="kicker">4 · The Proof</p>
+      <h2>Live run on a fresh idea</h2>
+      <p class="muted" style="font-size:0.7em">localhost web app → reasons stream in → both scores → verdict</p>
+      <table class="checks">
+        <thead><tr><th>Boundary check</th><th>Expected</th></tr></thead>
+        <tbody>
+          <tr><td>All 10s</td><td>100 / 100 → Go</td></tr>
+          <tr><td>All 1s</td><td>10 / 10 → Reframe or Shelve</td></tr>
+          <tr><td>Exactly 65</td><td>High (inclusive threshold)</td></tr>
+        </tbody>
+      </table>
+      <aside class="notes">0:50 · Switch to the web app. Read 2–3 reasons, both totals, the verdict. Mention the boundary checks.</aside>
+    </section>
+
+    <!-- 7 · Bonus -->
+    <section>
+      <p class="kicker">Advanced tier</p>
+      <h2>It remembers, and it learns</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>Memory bank</h3>
+          Every run appended to <code>scores.json</code>. New idea → recall the most similar past outcome.
+        </div>
+        <div class="card">
+          <h3>Self-learning loop</h3>
+          Outcome feedback → pattern → rule in <code>lessons.md</code> → the next score changes.
+        </div>
+      </div>
+      <aside class="notes">0:15 · scores.json recall; feedback → lessons.md rule → next score changes. Close: Spec → Decompose → Orchestrate → Verify.</aside>
+    </section>
+
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/notes/notes.min.js"></script>
+<script>
+  Reveal.initialize({ hash: true, slideNumber: 'c/t', transition: 'fade', plugins: [RevealNotes] });
+</script>
+</body>
+</html>

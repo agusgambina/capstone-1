@@ -1,0 +1,19 @@
+{
+  "name": "v-score-validator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent team that scores an idea's PoC and Market viability",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "examples": "node scripts/run-examples.js",
+    "slides": "npx serve apps/slides"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.291"
+  }
+}

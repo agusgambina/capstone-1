@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>V-Score Validator</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --line: #dfe3e8; --text: #1c2026; --muted: #646d7a;
+      --poc: #2f6fd6; --market: #c47f12; --go: #23875a; --derisk: #6b5bd6; --validate: #c47f12; --shelve: #c4443e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f1115; --panel: #1a1d24; --line: #2c313c; --text: #e6e8ec; --muted: #9aa1ad;
+        --poc: #5b9cf5; --market: #e8a33d; --go: #3fb27f; --derisk: #8c7cf0; --validate: #e8a33d; --shelve: #e0605a; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    .muted { color: var(--muted); }
+    textarea { width: 100%; min-height: 110px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0 24px; }
+    button { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+    button.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+    button:disabled { opacity: .5; cursor: progress; }
+    .verdict { display: none; border-radius: 10px; padding: 18px 20px; margin-bottom: 20px; background: var(--panel); border: 1px solid var(--line); border-left: 8px solid var(--muted); }
+    .verdict h2 { margin: 0; font-size: 22px; }
+    .totals { display: flex; gap: 28px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    .totals b { font-size: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    .axis h3 { margin: 0 0 8px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; }
+    .axis.poc h3 { color: var(--poc); } .axis.market h3 { color: var(--market); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+    .card .head { display: flex; justify-content: space-between; font-weight: 600; }
+    .card .score { font-variant-numeric: tabular-nums; }
+    .card.pending { opacity: .55; }
+    .card.pending .reason::after { content: 'Scoring…'; }
+    .reason { margin-top: 4px; color: var(--muted); font-size: 14px; }
+    .memory, .error { margin-bottom: 16px; padding: 10px 14px; border-radius: 8px; border: 1px dashed var(--line); font-size: 14px; }
+    .error { border: 1px solid var(--shelve); color: var(--shelve); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>V-Score Validator</h1>
+  <p class="muted">Describe an idea in plain English. Eight scorer agents rate it independently and in parallel. The orchestrator weights their scores and maps them to a verdict.</p>
+
+  <textarea id="idea" placeholder="e.g. A Slack bot that answers HR policy questions from the company handbook…"></textarea>
+  <div class="row">
+    <button id="score" class="primary">Score idea</button>
+    <span class="muted">Examples:</span>
+    <span id="examples"></span>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div id="error" class="error" hidden></div>
+  <div id="memory" class="memory" hidden></div>
+
+  <section id="verdict" class="verdict">
+    <h2 id="verdictLabel"></h2>
+    <div id="verdictWhy" class="muted"></div>
+    <div class="totals"><span>PoC <b id="poc"></b>/100</span><span>Market <b id="market"></b>/100</span></div>
+  </section>
+
+  <div class="grid">
+    <section class="axis poc"><h3>PoC viability</h3><div id="col-poc"></div></section>
+    <section class="axis market"><h3>Market viability</h3><div id="col-market"></div></section>
+  </div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const colors = { go: '--go', derisk: '--derisk', validate: '--validate', shelve: '--shelve' };
+
+  fetch('/api/examples').then((r) => r.json()).then((list) => {
+    for (const ex of list) {
+      const b = document.createElement('button');
+      b.textContent = ex.name;
+      b.onclick = () => { $('idea').value = ex.idea; };
+      $('examples').append(b, ' ');
+    }
+  }).catch(() => {});
+
+  function reset() {
+    $('error').hidden = true; $('memory').hidden = true;
+    $('verdict').style.display = 'none';
+    $('col-poc').innerHTML = ''; $('col-market').innerHTML = '';
+  }
+
+  function card(c) {
+    const el = document.createElement('div');
+    el.className = 'card pending'; el.id = `c-${c.id}`;
+    el.innerHTML = `<div class="head"><span></span><span class="score">–</span></div><div class="reason"></div>`;
+    el.querySelector('.head span').textContent = `${c.label} ×${c.weight}`;
+    $(`col-${c.axis}`).append(el);
+  }
+
+  function handle(e) {
+    if (e.type === 'start') e.criteria.forEach(card);
+    if (e.type === 'memory' && e.similar) {
+      $('memory').hidden = false;
+      $('memory').textContent = `Memory: most similar past idea (similarity ${e.similar.similarity}) scored PoC ${e.similar.poc} · Market ${e.similar.market}, verdict "${e.similar.verdict}": "${e.similar.idea.slice(0, 120)}…"`;
+    }
+    if (e.type === 'score') {
+      const el = $(`c-${e.criterion}`);
+      el.classList.remove('pending');
+      el.querySelector('.score').textContent = `${e.score}/10`;
+      el.querySelector('.reason').textContent = e.reason;
+    }
+    if (e.type === 'result') {
+      $('verdict').style.display = 'block';
+      $('verdict').style.borderLeftColor = `var(${colors[e.verdict]})`;
+      $('verdictLabel').textContent = e.label;
+      $('verdictWhy').textContent = e.why;
+      $('poc').textContent = e.poc; $('market').textContent = e.market;
+      $('status').textContent = `Done in ${(e.ms / 1000).toFixed(1)}s`;
+    }
+    if (e.type === 'error') { $('error').hidden = false; $('error').textContent = e.message; }
+  }
+
+  $('score').onclick = async () => {
+    const idea = $('idea').value.trim();
+    if (!idea) return;
+    reset();
+    $('score').disabled = true; $('status').textContent = 'Scoring…';
+    try {
+      const res = await fetch('/api/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea }) });
+      if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        lines.filter(Boolean).forEach((l) => handle(JSON.parse(l)));
+      }
+    } catch (err) {
+      handle({ type: 'error', message: err.message });
+      $('status').textContent = '';
+    } finally {
+      $('score').disabled = false;
+    }
+  };
+</script>
+</body>
+</html>

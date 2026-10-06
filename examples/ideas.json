@@ -1,0 +1,12 @@
+[
+  {
+    "name": "HR policy Slack bot",
+    "expected": "go",
+    "idea": "A Slack bot for mid-size companies that answers employees' HR policy questions (PTO, benefits, expense rules) by searching the company's existing handbook and linking to the exact source paragraph. HR teams currently spend hours each week answering the same questions by hand. Sold as a per-seat monthly subscription."
+  },
+  {
+    "name": "Offline translation earbuds",
+    "expected": "derisk",
+    "idea": "Wireless earbuds that translate a face-to-face conversation between any two of 40 languages in real time, fully offline with no phone or internet connection, keeping latency under 200 ms so it feels like a natural conversation. Aimed at international travellers and field workers."
+  }
+]

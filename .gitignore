@@ -1,0 +1,30 @@
+# Dependencies (restored with `npm install` from package-lock.json)
+node_modules/
+
+# Secrets — auth comes from the Claude CLI login or the environment, never the repo
+.env
+.env.*
+!.env.example
+
+# Runtime data: memory bank written by src/memory.js (plus its atomic-write temp files)
+data/scores.json
+data/*.tmp
+
+# Claude Code: personal settings stay local; skills/agents in .claude/ are tracked
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Logs and test output
+*.log
+npm-debug.log*
+coverage/
+
+# Tooling / browser automation artifacts
+.playwright-mcp/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
